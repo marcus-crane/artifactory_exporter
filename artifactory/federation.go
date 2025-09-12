@@ -5,11 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"strings"
 	"time"
 )
 
 const federationMirrorsLagEndpoint = "federation/status/mirrorsLag"
 const federationUnavailableMirrorsEndpoint = "federation/status/unavailableMirrors"
+
+// isRTFSEnabled checks if the response indicates RTFS is enabled
+func isRTFSEnabled(body []byte) bool {
+	return strings.Contains(string(body), "RTFS is enabled")
+}
 
 // IsFederationEnabled checks one of the federation endpoints to see if federation is enabled
 func (c *Client) IsFederationEnabled() bool {
@@ -68,6 +74,12 @@ func (c *Client) FetchMirrorLags() (MirrorLags, error) {
 	}
 	mirrorLags.NodeId = resp.NodeId
 
+	// Check if RTFS is enabled, which returns plain text instead of JSON
+	if isRTFSEnabled(resp.Body) {
+		c.logger.Debug("RTFS is enabled, mirror lags endpoint is not available")
+		return mirrorLags, nil
+	}
+
 	var mirrorLagsData []MirrorLag
 	err = json.Unmarshal(resp.Body, &mirrorLagsData)
 	if err != nil {
@@ -101,6 +113,12 @@ func (c *Client) FetchUnavailableMirrors() (UnavailableMirrors, error) {
 		}
 	}
 	unavailableMirrors.NodeId = resp.NodeId
+
+	// Check if RTFS is enabled, which returns plain text instead of JSON
+	if isRTFSEnabled(resp.Body) {
+		c.logger.Debug("RTFS is enabled, unavailable mirrors endpoint is not available")
+		return unavailableMirrors, nil
+	}
 
 	err = json.Unmarshal(resp.Body, &unavailableMirrors)
 	if err != nil {
